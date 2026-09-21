@@ -1,0 +1,830 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Bookmarklet Chat</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:       #0f1117;
+    --surface:  #161b24;
+    --border:   #252d3a;
+    --muted:    #3a4455;
+    --text:     #cdd6e8;
+    --text-dim: #5c6b80;
+    --accent:   #4f8ef7;
+    --accent-dim: rgba(79,142,247,0.12);
+    --own-bg:   rgba(79,142,247,0.07);
+    --own-border: rgba(79,142,247,0.25);
+    --error:    #f7635a;
+    --success:  #3ddc84;
+    --font-body: 'Inter', system-ui, sans-serif;
+    --font-mono: 'JetBrains Mono', 'Courier New', monospace;
+    box-sizing: border-box;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  *, *::before, *::after { box-sizing: inherit; margin: 0; padding: 0; }
+
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-body);
+    font-size: 14px;
+    line-height: 1.55;
+    overflow: hidden;
+  }
+
+  #app {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    max-width: 900px;
+    margin: 0 auto;
+    border-left: 1px solid var(--border);
+    border-right: 1px solid var(--border);
+  }
+
+  /* Header */
+  #header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 16px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+    gap: 10px;
+  }
+  #header-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
+  #header-title { font-family: var(--font-mono); font-size: 13px; font-weight: 600; color: var(--accent); white-space: nowrap; }
+  #status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); flex-shrink: 0; transition: background 0.3s; }
+  #status-dot.live { background: var(--success); box-shadow: 0 0 6px var(--success); }
+  #status-dot.error { background: var(--error); }
+  #status-text { font-size: 11px; color: var(--text-dim); font-family: var(--font-mono); }
+  #header-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+  #my-id-badge {
+    font-family: var(--font-mono); font-size: 11px; font-weight: 600;
+    color: var(--accent); background: var(--accent-dim);
+    border: 1px solid rgba(79,142,247,0.3);
+    padding: 2px 8px; border-radius: 3px; letter-spacing: 0.05em;
+  }
+  .icon-btn {
+    background: none; border: 1px solid var(--border); color: var(--text-dim);
+    padding: 4px 10px; border-radius: 4px; cursor: pointer;
+    font-size: 11px; font-family: var(--font-mono);
+    transition: border-color 0.2s, color 0.2s, background 0.2s; white-space: nowrap;
+  }
+  .icon-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
+
+  /* Config panel */
+  #config-panel {
+    background: var(--surface); border-bottom: 1px solid var(--border);
+    padding: 12px 16px; display: none; flex-direction: column; gap: 8px; flex-shrink: 0;
+  }
+  #config-panel.open { display: flex; }
+  #config-panel label { font-size: 11px; color: var(--text-dim); font-family: var(--font-mono); margin-bottom: 2px; display: block; }
+  #config-panel input {
+    width: 100%; background: var(--bg); border: 1px solid var(--border); color: var(--text);
+    padding: 7px 10px; border-radius: 4px; font-family: var(--font-mono); font-size: 12px;
+    outline: none; transition: border-color 0.2s;
+  }
+  #config-panel input:focus { border-color: var(--accent); }
+  #config-save {
+    align-self: flex-end; background: var(--accent); color: #fff; border: none;
+    padding: 6px 16px; border-radius: 4px; cursor: pointer;
+    font-family: var(--font-mono); font-size: 12px; font-weight: 600; transition: opacity 0.2s;
+  }
+  #config-save:hover { opacity: 0.85; }
+  #config-hint { font-size: 11px; color: var(--text-dim); line-height: 1.5; }
+  #config-hint a { color: var(--accent); }
+
+  /* Messages area */
+  #messages {
+    flex: 1; overflow-y: auto; padding: 16px;
+    display: flex; flex-direction: column; gap: 2px; scroll-behavior: smooth;
+  }
+  #messages::-webkit-scrollbar { width: 6px; }
+  #messages::-webkit-scrollbar-track { background: transparent; }
+  #messages::-webkit-scrollbar-thumb { background: var(--muted); border-radius: 3px; }
+
+  .msg {
+    padding: 5px 10px; border-radius: 4px; line-height: 1.5;
+    border-left: 2px solid transparent; word-break: break-word; transition: background 0.15s;
+  }
+  .msg:hover { background: rgba(255,255,255,0.02); }
+  .msg.own { background: var(--own-bg); border-left-color: var(--accent); }
+  .msg-id { font-family: var(--font-mono); font-size: 11px; font-weight: 600; color: var(--text-dim); margin-right: 6px; flex-shrink: 0; }
+  .msg.own .msg-id { color: var(--accent); }
+  .msg-body { color: var(--text); font-size: 13.5px; }
+  .msg-row { display: flex; align-items: baseline; gap: 0; flex-wrap: wrap; }
+  .msg-time { font-family: var(--font-mono); font-size: 10px; color: var(--text-dim); margin-left: auto; padding-left: 10px; flex-shrink: 0; opacity: 0; transition: opacity 0.2s; }
+  .msg:hover .msg-time { opacity: 1; }
+  .msg-system { text-align: center; color: var(--text-dim); font-size: 11px; font-family: var(--font-mono); padding: 8px 0; }
+
+  /* Image messages */
+  .msg-image-link {
+    display: inline-block;
+    color: var(--accent);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    text-decoration: underline;
+    text-decoration-color: rgba(79,142,247,0.4);
+    cursor: pointer;
+    margin-top: 2px;
+    word-break: break-all;
+  }
+  .msg-image-link:hover { text-decoration-color: var(--accent); }
+  .msg-image-preview {
+    display: block;
+    margin-top: 6px;
+    max-width: min(360px, 90%);
+    max-height: 260px;
+    object-fit: contain;
+    border-radius: 5px;
+    border: 1px solid var(--border);
+    cursor: pointer;
+    background: var(--bg);
+  }
+  .msg-image-preview.hidden { display: none; }
+
+  /* Lightbox */
+  #lightbox {
+    display: none;
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.85);
+    z-index: 9999;
+    align-items: center;
+    justify-content: center;
+    cursor: zoom-out;
+  }
+  #lightbox.open { display: flex; }
+  #lightbox img {
+    max-width: 92vw; max-height: 92vh;
+    object-fit: contain;
+    border-radius: 6px;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.6);
+    pointer-events: none;
+  }
+  #lightbox-close {
+    position: absolute; top: 16px; right: 20px;
+    color: rgba(255,255,255,0.6); font-size: 28px; cursor: pointer;
+    line-height: 1; background: none; border: none;
+    transition: color 0.2s;
+  }
+  #lightbox-close:hover { color: #fff; }
+
+  #empty-state {
+    flex: 1; display: flex; flex-direction: column; align-items: center;
+    justify-content: center; color: var(--text-dim);
+    font-size: 12px; font-family: var(--font-mono); gap: 6px; text-align: center;
+  }
+  #empty-state .big { font-size: 28px; opacity: 0.3; }
+
+  /* Input bar */
+  #input-area {
+    display: flex; align-items: flex-end; gap: 8px;
+    padding: 10px 16px;
+    padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+    background: var(--surface); border-top: 1px solid var(--border); flex-shrink: 0;
+  }
+  #message-input {
+    flex: 1; background: var(--bg); border: 1px solid var(--border); color: var(--text);
+    padding: 9px 12px; border-radius: 5px; font-family: var(--font-body); font-size: 13.5px;
+    line-height: 1.5; resize: none; min-height: 40px; max-height: 120px;
+    outline: none; transition: border-color 0.2s; overflow-y: auto;
+  }
+  #message-input:focus { border-color: var(--accent); }
+  #message-input::placeholder { color: var(--text-dim); }
+
+  #img-btn {
+    background: none; border: 1px solid var(--border); color: var(--text-dim);
+    padding: 0 10px; border-radius: 5px; cursor: pointer; height: 40px;
+    font-size: 16px; flex-shrink: 0; transition: border-color 0.2s, color 0.2s, background 0.2s;
+    display: flex; align-items: center; justify-content: center;
+  }
+  #img-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
+  #img-input { display: none; }
+
+  /* Image upload preview strip */
+  #img-preview-strip {
+    display: none;
+    padding: 8px 16px 0;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    gap: 8px;
+    flex-wrap: wrap;
+    flex-shrink: 0;
+  }
+  #img-preview-strip.has-images { display: flex; }
+  .img-thumb-wrap {
+    position: relative; width: 56px; height: 56px;
+  }
+  .img-thumb {
+    width: 56px; height: 56px; object-fit: cover;
+    border-radius: 4px; border: 1px solid var(--border);
+  }
+  .img-thumb-remove {
+    position: absolute; top: -5px; right: -5px;
+    width: 16px; height: 16px; border-radius: 50%;
+    background: var(--error); color: #fff; border: none;
+    cursor: pointer; font-size: 10px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+    line-height: 1;
+  }
+
+  #send-btn {
+    background: var(--accent); color: #fff; border: none;
+    padding: 9px 18px; border-radius: 5px; cursor: pointer;
+    font-family: var(--font-mono); font-size: 12px; font-weight: 600;
+    height: 40px; flex-shrink: 0;
+    transition: opacity 0.2s, transform 0.1s; letter-spacing: 0.03em;
+  }
+  #send-btn:hover { opacity: 0.85; }
+  #send-btn:active { transform: scale(0.97); }
+  #send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* Toast */
+  #toast {
+    position: fixed; bottom: 60px; left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: var(--surface); border: 1px solid var(--border); color: var(--text);
+    padding: 8px 16px; border-radius: 5px; font-size: 12px; font-family: var(--font-mono);
+    opacity: 0; pointer-events: none; transition: opacity 0.25s, transform 0.25s;
+    z-index: 100; white-space: nowrap;
+  }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  #toast.err { border-color: var(--error); color: var(--error); }
+  #toast.ok { border-color: var(--success); color: var(--success); }
+
+  /* No-token banner */
+  #no-token-banner {
+    background: rgba(247,99,90,0.08); border-bottom: 1px solid rgba(247,99,90,0.25);
+    color: #f7a09a; font-size: 11px; font-family: var(--font-mono);
+    padding: 8px 16px; display: none; align-items: center; gap: 8px; flex-shrink: 0;
+  }
+  #no-token-banner.visible { display: flex; }
+  #no-token-banner button {
+    background: none; border: 1px solid rgba(247,99,90,0.4); color: #f7a09a;
+    padding: 2px 10px; border-radius: 3px; cursor: pointer;
+    font-family: var(--font-mono); font-size: 11px; margin-left: auto;
+  }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <div id="header">
+    <div id="header-left">
+      <div id="status-dot"></div>
+      <span id="header-title">bkmk-chat</span>
+      <span id="status-text">connecting…</span>
+    </div>
+    <div id="header-right">
+      <span id="my-id-badge" title="Your device ID">—</span>
+      <button class="icon-btn" id="refresh-btn">↻ refresh</button>
+      <button class="icon-btn" id="config-btn">⚙ token</button>
+    </div>
+  </div>
+
+  <div id="config-panel">
+    <div>
+      <label>GitHub Personal Access Token (needs <code>public_repo</code> scope)</label>
+      <input type="password" id="token-input" placeholder="ghp_…" autocomplete="off" spellcheck="false">
+    </div>
+    <p id="config-hint">
+      Generate at <a href="https://github.com/settings/tokens/new?scopes=public_repo&description=BookmarkletChat" target="_blank">github.com/settings/tokens</a> — only <strong>public_repo</strong> scope needed. Stored in localStorage on this page's origin.
+    </p>
+    <button id="config-save">Save token</button>
+  </div>
+
+  <div id="no-token-banner">
+    <span>⚠ No GitHub token — you can read but not send.</span>
+    <button id="banner-config-btn">Set token</button>
+  </div>
+
+  <div id="messages">
+    <div id="empty-state">
+      <span class="big">◌</span>
+      <span>No messages yet</span>
+    </div>
+  </div>
+
+  <div id="img-preview-strip"></div>
+
+  <div id="input-area">
+    <textarea id="message-input" placeholder="Type a message…" rows="1" maxlength="2000"></textarea>
+    <button id="img-btn" title="Attach image">🖼</button>
+    <input type="file" id="img-input" accept="image/*" multiple>
+    <button id="send-btn">send</button>
+  </div>
+
+</div>
+
+<div id="lightbox">
+  <button id="lightbox-close">✕</button>
+  <img id="lightbox-img" src="" alt="">
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ── Constants ────────────────────────────────────────────────────────────────
+const REPO_OWNER    = 'ToasterGG';
+const REPO_NAME     = 'Bookmarklet-Chat';
+const MESSAGES_FILE = 'messages.txt';
+const BRANCH        = 'main';
+const API_BASE      = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${MESSAGES_FILE}`;
+const IMG_DIR       = 'images';
+const IMG_API_BASE  = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${IMG_DIR}`;
+const RAW_BASE      = `https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${BRANCH}/${IMG_DIR}`;
+const POLL_MS       = 10000;
+const SYMBOLS       = ['!','$','%','&','*','@','#'];
+const LETTERS       = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+const DIGITS        = '0123456789';
+
+// Storage key prefix — same key works whether running as file:// or data: URI
+const SK_ID    = 'bkmk_chat_id';
+const SK_TOKEN = 'bkmk_chat_token';
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let myID        = null;
+let ghToken     = null;
+let fileSHA     = null;
+let pollTimer   = null;
+let lastContent = '';
+let isSending   = false;
+let pendingImgs = []; // [{file, dataURL, name}]
+
+// ── Storage helpers (tries localStorage, falls back to sessionStorage) ────────
+function store(key, val) {
+  try { localStorage.setItem(key, val); return; } catch(e) {}
+  try { sessionStorage.setItem(key, val); } catch(e) {}
+}
+function retrieve(key) {
+  try { const v = localStorage.getItem(key); if (v !== null) return v; } catch(e) {}
+  try { const v = sessionStorage.getItem(key); if (v !== null) return v; } catch(e) {}
+  // Last resort: check URL hash params (written by bookmarklet for data: URIs)
+  try {
+    const hash = location.hash.slice(1);
+    const params = new URLSearchParams(hash);
+    if (params.has(key)) return params.get(key);
+  } catch(e) {}
+  return null;
+}
+
+// ── DOM refs ──────────────────────────────────────────────────────────────────
+const $messages      = document.getElementById('messages');
+const $input         = document.getElementById('message-input');
+const $sendBtn       = document.getElementById('send-btn');
+const $statusDot     = document.getElementById('status-dot');
+const $statusText    = document.getElementById('status-text');
+const $myIDBadge     = document.getElementById('my-id-badge');
+const $configPanel   = document.getElementById('config-panel');
+const $configBtn     = document.getElementById('config-btn');
+const $tokenInput    = document.getElementById('token-input');
+const $configSave    = document.getElementById('config-save');
+const $refreshBtn    = document.getElementById('refresh-btn');
+const $noTokenBanner = document.getElementById('no-token-banner');
+const $bannerCfgBtn  = document.getElementById('banner-config-btn');
+const $toast         = document.getElementById('toast');
+const $emptyState    = document.getElementById('empty-state');
+const $imgBtn        = document.getElementById('img-btn');
+const $imgInput      = document.getElementById('img-input');
+const $imgStrip      = document.getElementById('img-preview-strip');
+const $lightbox      = document.getElementById('lightbox');
+const $lightboxImg   = document.getElementById('lightbox-img');
+const $lightboxClose = document.getElementById('lightbox-close');
+
+// ── ID generation ─────────────────────────────────────────────────────────────
+function generateID() {
+  const l1 = LETTERS[Math.floor(Math.random() * LETTERS.length)];
+  const l2 = LETTERS[Math.floor(Math.random() * LETTERS.length)];
+  const n1 = DIGITS[Math.floor(Math.random() * DIGITS.length)];
+  const s1 = SYMBOLS[Math.floor(Math.random() * SYMBOLS.length)];
+  return `${l1}${l2}${n1}${s1}`;
+}
+
+function getOrCreateID() {
+  let id = retrieve(SK_ID);
+  if (!id) {
+    id = generateID();
+    store(SK_ID, id);
+  }
+  return id;
+}
+
+// ── Token ─────────────────────────────────────────────────────────────────────
+function loadToken()  { return retrieve(SK_TOKEN); }
+function saveToken(t) { store(SK_TOKEN, t); }
+
+function updateTokenUI() {
+  if (ghToken) {
+    $noTokenBanner.classList.remove('visible');
+    $sendBtn.disabled = false;
+  } else {
+    $noTokenBanner.classList.add('visible');
+    $sendBtn.disabled = true;
+  }
+}
+
+// ── Toast ─────────────────────────────────────────────────────────────────────
+let toastTimer = null;
+function toast(msg, type = '') {
+  $toast.textContent = msg;
+  $toast.className = 'show' + (type ? ' ' + type : '');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { $toast.className = ''; }, 2800);
+}
+
+// ── Status ────────────────────────────────────────────────────────────────────
+function setStatus(state, text) {
+  $statusDot.className = state;
+  $statusText.textContent = text;
+}
+
+// ── Fetch messages ────────────────────────────────────────────────────────────
+async function fetchMessages(silent = false) {
+  if (!silent) setStatus('', 'loading…');
+  try {
+    const headers = { 'Accept': 'application/vnd.github+json' };
+    if (ghToken) headers['Authorization'] = `Bearer ${ghToken}`;
+
+    const res = await fetch(`${API_BASE}?ref=${BRANCH}&t=${Date.now()}`, { headers });
+
+    if (res.status === 404) {
+      fileSHA = null; lastContent = '';
+      renderMessages('');
+      setStatus('live', 'live · no messages yet');
+      return;
+    }
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.message || `HTTP ${res.status}`);
+    }
+
+    const data = await res.json();
+    fileSHA = data.sha;
+    const content = atob(data.content.replace(/\n/g, ''));
+    if (content !== lastContent) {
+      lastContent = content;
+      renderMessages(content);
+    }
+    setStatus('live', `live · ${new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}`);
+  } catch(e) {
+    setStatus('error', 'error — retrying');
+    if (!silent) toast('Failed to load: ' + e.message, 'err');
+  }
+}
+
+// ── Render messages ───────────────────────────────────────────────────────────
+function parseTimestamp(line) {
+  const m = line.match(/^\[(\d{2}:\d{2})\] /);
+  if (m) return { time: m[1], rest: line.slice(m[0].length) };
+  return { time: null, rest: line };
+}
+
+// Detect image lines: [time] ID: [img:filename.ext]
+const IMG_RE = /^\[img:([^\]]+)\]$/;
+
+function renderMessages(content) {
+  const wasAtBottom = isAtBottom();
+  const lines = content ? content.split('\n').filter(l => l.trim()) : [];
+
+  $emptyState.style.display = lines.length ? 'none' : 'flex';
+  $messages.querySelectorAll('.msg, .msg-system').forEach(el => el.remove());
+  if (!lines.length) return;
+
+  const frag = document.createDocumentFragment();
+
+  for (const line of lines) {
+    const { time, rest } = parseTimestamp(line);
+    const colonIdx = rest.indexOf(': ');
+
+    if (colonIdx === -1) {
+      const el = document.createElement('div');
+      el.className = 'msg-system';
+      el.textContent = rest;
+      frag.appendChild(el);
+      continue;
+    }
+
+    const id  = rest.slice(0, colonIdx);
+    const msg = rest.slice(colonIdx + 2);
+    const isOwn = id === myID;
+    const imgMatch = msg.match(IMG_RE);
+
+    const el = document.createElement('div');
+    el.className = 'msg' + (isOwn ? ' own' : '');
+
+    const row = document.createElement('div');
+    row.className = 'msg-row';
+
+    const idSpan = document.createElement('span');
+    idSpan.className = 'msg-id';
+    idSpan.textContent = id + ':';
+    row.appendChild(idSpan);
+
+    if (imgMatch) {
+      const filename = imgMatch[1];
+      const imgUrl   = `${RAW_BASE}/${filename}`;
+
+      const wrap = document.createElement('span');
+      wrap.className = 'msg-body';
+
+      const link = document.createElement('a');
+      link.className = 'msg-image-link';
+      link.textContent = filename;
+      link.href = '#';
+      link.addEventListener('click', e => {
+        e.preventDefault();
+        const preview = wrap.querySelector('.msg-image-preview');
+        if (preview) {
+          preview.classList.toggle('hidden');
+        }
+      });
+      wrap.appendChild(document.createTextNode(' '));
+      wrap.appendChild(link);
+
+      // Inline preview (hidden by default, click filename to show)
+      const preview = document.createElement('img');
+      preview.className = 'msg-image-preview hidden';
+      preview.src = imgUrl;
+      preview.alt = filename;
+      preview.addEventListener('click', () => openLightbox(imgUrl));
+      preview.addEventListener('error', () => { preview.style.display = 'none'; });
+      wrap.appendChild(preview);
+
+      row.appendChild(wrap);
+    } else {
+      const bodySpan = document.createElement('span');
+      bodySpan.className = 'msg-body';
+      bodySpan.textContent = ' ' + msg;
+      row.appendChild(bodySpan);
+    }
+
+    if (time) {
+      const timeSpan = document.createElement('span');
+      timeSpan.className = 'msg-time';
+      timeSpan.textContent = time;
+      row.appendChild(timeSpan);
+    }
+
+    el.appendChild(row);
+    frag.appendChild(el);
+  }
+
+  $messages.appendChild(frag);
+  if (wasAtBottom) scrollToBottom(false);
+}
+
+// ── Lightbox ──────────────────────────────────────────────────────────────────
+function openLightbox(src) {
+  $lightboxImg.src = src;
+  $lightbox.classList.add('open');
+}
+function closeLightbox() {
+  $lightbox.classList.remove('open');
+  $lightboxImg.src = '';
+}
+$lightbox.addEventListener('click', e => { if (e.target === $lightbox) closeLightbox(); });
+$lightboxClose.addEventListener('click', closeLightbox);
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeLightbox(); });
+
+// ── Scroll ────────────────────────────────────────────────────────────────────
+function isAtBottom() {
+  return $messages.scrollHeight - $messages.scrollTop - $messages.clientHeight < 80;
+}
+function scrollToBottom(smooth = true) {
+  $messages.scrollTo({ top: $messages.scrollHeight, behavior: smooth ? 'smooth' : 'instant' });
+}
+
+// ── Image pending queue ───────────────────────────────────────────────────────
+function addPendingImages(files) {
+  for (const file of files) {
+    if (!file.type.startsWith('image/')) continue;
+    const reader = new FileReader();
+    reader.onload = e => {
+      pendingImgs.push({ file, dataURL: e.target.result, name: file.name });
+      renderImgStrip();
+    };
+    reader.readAsDataURL(file);
+  }
+}
+
+function renderImgStrip() {
+  $imgStrip.innerHTML = '';
+  if (!pendingImgs.length) { $imgStrip.classList.remove('has-images'); return; }
+  $imgStrip.classList.add('has-images');
+  pendingImgs.forEach((img, i) => {
+    const wrap = document.createElement('div');
+    wrap.className = 'img-thumb-wrap';
+    const thumb = document.createElement('img');
+    thumb.className = 'img-thumb';
+    thumb.src = img.dataURL;
+    const rm = document.createElement('button');
+    rm.className = 'img-thumb-remove';
+    rm.textContent = '✕';
+    rm.addEventListener('click', () => { pendingImgs.splice(i, 1); renderImgStrip(); });
+    wrap.appendChild(thumb);
+    wrap.appendChild(rm);
+    $imgStrip.appendChild(wrap);
+  });
+}
+
+// ── Upload image to GitHub ────────────────────────────────────────────────────
+async function uploadImage(imgObj) {
+  // Unique filename: timestamp + original name
+  const ts = Date.now();
+  const safeName = imgObj.file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+  const filename = `${ts}_${safeName}`;
+  const path = `${IMG_DIR}/${filename}`;
+  const apiUrl = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${path}`;
+
+  // Convert dataURL to base64 only
+  const b64 = imgObj.dataURL.split(',')[1];
+
+  const headers = {
+    'Accept': 'application/vnd.github+json',
+    'Authorization': `Bearer ${ghToken}`,
+    'Content-Type': 'application/json',
+  };
+  const body = JSON.stringify({
+    message: `img: ${myID} ${filename}`,
+    content: b64,
+    branch: BRANCH,
+  });
+
+  const res = await fetch(apiUrl, { method: 'PUT', headers, body });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || `HTTP ${res.status}`);
+  }
+  return filename;
+}
+
+// ── Send message ──────────────────────────────────────────────────────────────
+async function sendMessage() {
+  if (isSending || !ghToken) return;
+  const text = $input.value.trim();
+  if (!text && !pendingImgs.length) return;
+
+  isSending = true;
+  $sendBtn.disabled = true;
+  $sendBtn.textContent = '…';
+
+  try {
+    // Upload any images first
+    const uploadedFilenames = [];
+    for (const img of pendingImgs) {
+      $sendBtn.textContent = '↑ img';
+      const filename = await uploadImage(img);
+      uploadedFilenames.push(filename);
+    }
+
+    // Fetch latest file state
+    const headersRead = {
+      'Accept': 'application/vnd.github+json',
+      'Authorization': `Bearer ${ghToken}`,
+    };
+    const resCheck = await fetch(`${API_BASE}?ref=${BRANCH}&t=${Date.now()}`, { headers: headersRead });
+
+    let currentContent = '';
+    let currentSHA     = null;
+
+    if (resCheck.ok) {
+      const data    = await resCheck.json();
+      currentSHA    = data.sha;
+      currentContent = atob(data.content.replace(/\n/g, ''));
+    } else if (resCheck.status !== 404) {
+      throw new Error(`HTTP ${resCheck.status} reading file`);
+    }
+
+    const now     = new Date();
+    const timeStr = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+    const newLines = [];
+
+    if (text) newLines.push(`[${timeStr}] ${myID}: ${text}`);
+    for (const fn of uploadedFilenames) {
+      newLines.push(`[${timeStr}] ${myID}: [img:${fn}]`);
+    }
+
+    const newContent = currentContent
+      ? currentContent + '\n' + newLines.join('\n')
+      : newLines.join('\n');
+
+    const encoded = btoa(unescape(encodeURIComponent(newContent)));
+    const putBody = { message: `chat: ${myID}`, content: encoded, branch: BRANCH };
+    if (currentSHA) putBody.sha = currentSHA;
+
+    const headers = {
+      'Accept': 'application/vnd.github+json',
+      'Authorization': `Bearer ${ghToken}`,
+      'Content-Type': 'application/json',
+    };
+
+    const res = await fetch(API_BASE, { method: 'PUT', headers, body: JSON.stringify(putBody) });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.message || `HTTP ${res.status}`);
+    }
+
+    const result = await res.json();
+    fileSHA = result.content.sha;
+
+    $input.value = '';
+    pendingImgs = [];
+    renderImgStrip();
+    autoResizeInput();
+
+    lastContent = newContent;
+    renderMessages(newContent);
+    scrollToBottom(true);
+    setStatus('live', `live · ${new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}`);
+
+  } catch(e) {
+    toast('Send failed: ' + e.message, 'err');
+  } finally {
+    isSending    = false;
+    $sendBtn.disabled = false;
+    $sendBtn.textContent = 'send';
+  }
+}
+
+// ── Input auto-resize ─────────────────────────────────────────────────────────
+function autoResizeInput() {
+  $input.style.height = 'auto';
+  $input.style.height = Math.min($input.scrollHeight, 120) + 'px';
+}
+
+// ── Polling ───────────────────────────────────────────────────────────────────
+function startPolling() {
+  clearInterval(pollTimer);
+  pollTimer = setInterval(() => fetchMessages(true), POLL_MS);
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+function init() {
+  myID    = getOrCreateID();
+  ghToken = loadToken();
+
+  $myIDBadge.textContent = myID;
+  if (ghToken) $tokenInput.value = ghToken;
+
+  updateTokenUI();
+  fetchMessages(false);
+  startPolling();
+}
+
+// ── Event listeners ───────────────────────────────────────────────────────────
+$sendBtn.addEventListener('click', sendMessage);
+
+$input.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+});
+$input.addEventListener('input', autoResizeInput);
+
+$refreshBtn.addEventListener('click', () => { fetchMessages(false); startPolling(); });
+
+$configBtn.addEventListener('click', () => $configPanel.classList.toggle('open'));
+
+$bannerCfgBtn.addEventListener('click', () => $configPanel.classList.add('open'));
+
+$configSave.addEventListener('click', () => {
+  const t = $tokenInput.value.trim();
+  if (!t) { toast('Enter a token first', 'err'); return; }
+  ghToken = t;
+  saveToken(t);
+  $configPanel.classList.remove('open');
+  updateTokenUI();
+  toast('Token saved ✓', 'ok');
+  fetchMessages(false);
+});
+
+$tokenInput.addEventListener('keydown', e => { if (e.key === 'Enter') $configSave.click(); });
+
+$imgBtn.addEventListener('click', () => $imgInput.click());
+$imgInput.addEventListener('change', () => {
+  if ($imgInput.files.length) addPendingImages(Array.from($imgInput.files));
+  $imgInput.value = '';
+});
+
+// Paste image from clipboard
+document.addEventListener('paste', e => {
+  const files = Array.from(e.clipboardData.files).filter(f => f.type.startsWith('image/'));
+  if (files.length) addPendingImages(files);
+});
+
+// Boot
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', init);
+} else {
+  init();
+}
+</script>
+</body>
+</html>
