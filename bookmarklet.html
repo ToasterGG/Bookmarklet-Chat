@@ -3,828 +3,575 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Bookmarklet Chat</title>
+<title>bkmk-chat</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 <style>
-  :root {
-    --bg:       #0f1117;
-    --surface:  #161b24;
-    --border:   #252d3a;
-    --muted:    #3a4455;
-    --text:     #cdd6e8;
-    --text-dim: #5c6b80;
-    --accent:   #4f8ef7;
-    --accent-dim: rgba(79,142,247,0.12);
-    --own-bg:   rgba(79,142,247,0.07);
-    --own-border: rgba(79,142,247,0.25);
-    --error:    #f7635a;
-    --success:  #3ddc84;
-    --font-body: 'Inter', system-ui, sans-serif;
-    --font-mono: 'JetBrains Mono', 'Courier New', monospace;
-    box-sizing: border-box;
-    padding-top: env(safe-area-inset-top, 0px);
-    padding-bottom: env(safe-area-inset-bottom, 0px);
-  }
-  *, *::before, *::after { box-sizing: inherit; margin: 0; padding: 0; }
+:root{--bg:#0f1117;--surface:#161b24;--border:#252d3a;--muted:#3a4455;--text:#cdd6e8;--dim:#5c6b80;--accent:#4f8ef7;--adim:rgba(79,142,247,0.12);--ownbg:rgba(79,142,247,0.07);--err:#f7635a;--ok:#3ddc84;--fb:'Inter',system-ui,sans-serif;--fm:'JetBrains Mono','Courier New',monospace;box-sizing:border-box}
+*,*::before,*::after{box-sizing:inherit;margin:0;padding:0}
+html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);font-family:var(--fb);font-size:14px;line-height:1.55}
 
-  html, body {
-    height: 100%;
-    background: var(--bg);
-    color: var(--text);
-    font-family: var(--font-body);
-    font-size: 14px;
-    line-height: 1.55;
-    overflow: hidden;
-  }
+/* ── Layout ── */
+#app{display:flex;height:var(--vh,100vh);overflow:hidden;position:relative}
 
-  #app {
-    display: flex;
-    flex-direction: column;
-    height: 100%;
-    max-width: 900px;
-    margin: 0 auto;
-    border-left: 1px solid var(--border);
-    border-right: 1px solid var(--border);
-  }
+/* ── Sidebar ── */
+#sb{width:220px;flex-shrink:0;display:flex;flex-direction:column;background:var(--surface);border-right:1px solid var(--border);overflow:hidden}
+#sbh{padding:12px 14px 10px;border-bottom:1px solid var(--border);display:flex;flex-direction:column;gap:6px;flex-shrink:0}
+#sb-title{font-family:var(--fm);font-size:13px;font-weight:600;color:var(--accent)}
+#id-badge{font-family:var(--fm);font-size:11px;font-weight:600;color:var(--accent);background:var(--adim);border:1px solid rgba(79,142,247,0.3);padding:2px 8px;border-radius:3px;width:fit-content}
+#chat-list{flex:1;overflow-y:auto;padding:6px 0}
+#chat-list::-webkit-scrollbar{width:4px}
+#chat-list::-webkit-scrollbar-thumb{background:var(--muted);border-radius:2px}
+.cl-label{font-family:var(--fm);font-size:10px;font-weight:600;color:var(--dim);text-transform:uppercase;letter-spacing:.08em;padding:10px 14px 3px}
+.ci{display:flex;align-items:center;gap:7px;padding:7px 12px;cursor:pointer;transition:background .12s;font-size:13px;color:var(--dim);border-left:2px solid transparent;user-select:none}
+.ci:hover{background:rgba(255,255,255,.04);color:var(--text)}
+.ci.active{background:var(--adim);color:var(--accent);border-left-color:var(--accent);font-weight:500}
+.ci-icon{font-size:12px;flex-shrink:0;opacity:.7}
+.ci.active .ci-icon{opacity:1}
+.ci-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#sbf{padding:10px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:6px;flex-shrink:0}
+.sbbtn{background:none;border:1px solid var(--border);color:var(--dim);padding:7px 10px;border-radius:4px;cursor:pointer;font-size:12px;font-family:var(--fm);text-align:left;transition:border-color .2s,color .2s,background .2s;width:100%}
+.sbbtn:hover{border-color:var(--accent);color:var(--accent);background:var(--adim)}
+.sbbtn.pri{background:rgba(79,142,247,.13);border-color:rgba(79,142,247,.35);color:var(--accent)}
+.sbbtn.pri:hover{background:var(--accent);border-color:var(--accent);color:#fff}
 
-  /* Header */
-  #header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 10px 16px;
-    background: var(--surface);
-    border-bottom: 1px solid var(--border);
-    flex-shrink: 0;
-    gap: 10px;
-  }
-  #header-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
-  #header-title { font-family: var(--font-mono); font-size: 13px; font-weight: 600; color: var(--accent); white-space: nowrap; }
-  #status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); flex-shrink: 0; transition: background 0.3s; }
-  #status-dot.live { background: var(--success); box-shadow: 0 0 6px var(--success); }
-  #status-dot.error { background: var(--error); }
-  #status-text { font-size: 11px; color: var(--text-dim); font-family: var(--font-mono); }
-  #header-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
-  #my-id-badge {
-    font-family: var(--font-mono); font-size: 11px; font-weight: 600;
-    color: var(--accent); background: var(--accent-dim);
-    border: 1px solid rgba(79,142,247,0.3);
-    padding: 2px 8px; border-radius: 3px; letter-spacing: 0.05em;
-  }
-  .icon-btn {
-    background: none; border: 1px solid var(--border); color: var(--text-dim);
-    padding: 4px 10px; border-radius: 4px; cursor: pointer;
-    font-size: 11px; font-family: var(--font-mono);
-    transition: border-color 0.2s, color 0.2s, background 0.2s; white-space: nowrap;
-  }
-  .icon-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
+/* ── Main ── */
+#main{flex:1;display:flex;flex-direction:column;min-width:0;overflow:hidden}
 
-  /* Config panel */
-  #config-panel {
-    background: var(--surface); border-bottom: 1px solid var(--border);
-    padding: 12px 16px; display: none; flex-direction: column; gap: 8px; flex-shrink: 0;
-  }
-  #config-panel.open { display: flex; }
-  #config-panel label { font-size: 11px; color: var(--text-dim); font-family: var(--font-mono); margin-bottom: 2px; display: block; }
-  #config-panel input {
-    width: 100%; background: var(--bg); border: 1px solid var(--border); color: var(--text);
-    padding: 7px 10px; border-radius: 4px; font-family: var(--font-mono); font-size: 12px;
-    outline: none; transition: border-color 0.2s;
-  }
-  #config-panel input:focus { border-color: var(--accent); }
-  #config-save {
-    align-self: flex-end; background: var(--accent); color: #fff; border: none;
-    padding: 6px 16px; border-radius: 4px; cursor: pointer;
-    font-family: var(--font-mono); font-size: 12px; font-weight: 600; transition: opacity 0.2s;
-  }
-  #config-save:hover { opacity: 0.85; }
-  #config-hint { font-size: 11px; color: var(--text-dim); line-height: 1.5; }
-  #config-hint a { color: var(--accent); }
+/* ── Chat header ── */
+#chdr{display:flex;align-items:center;padding:10px 16px;background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0;gap:8px}
+#back-btn{display:none;background:none;border:1px solid var(--border);color:var(--dim);padding:4px 10px;border-radius:4px;cursor:pointer;font-size:15px;flex-shrink:0;line-height:1}
+#chat-name-disp{font-family:var(--fm);font-size:13px;font-weight:600;color:var(--text);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#hdr-right{display:flex;align-items:center;gap:6px;flex-shrink:0}
+#sdot{width:7px;height:7px;border-radius:50%;background:var(--muted);flex-shrink:0;transition:background .3s}
+#sdot.live{background:var(--ok);box-shadow:0 0 5px var(--ok)}
+#sdot.err{background:var(--err)}
+#stxt{font-size:11px;color:var(--dim);font-family:var(--fm)}
+.ibtn{background:none;border:1px solid var(--border);color:var(--dim);padding:4px 9px;border-radius:4px;cursor:pointer;font-size:11px;font-family:var(--fm);transition:border-color .2s,color .2s,background .2s;white-space:nowrap}
+.ibtn:hover{border-color:var(--accent);color:var(--accent);background:var(--adim)}
+#del-btn{display:none;border-color:rgba(247,99,90,.3);color:var(--err)}
+#del-btn:hover{background:rgba(247,99,90,.1);border-color:var(--err)}
+#del-btn.confirming{background:rgba(247,99,90,.15);border-color:var(--err);color:var(--err)}
 
-  /* Messages area */
-  #messages {
-    flex: 1; overflow-y: auto; padding: 16px;
-    display: flex; flex-direction: column; gap: 2px; scroll-behavior: smooth;
-  }
-  #messages::-webkit-scrollbar { width: 6px; }
-  #messages::-webkit-scrollbar-track { background: transparent; }
-  #messages::-webkit-scrollbar-thumb { background: var(--muted); border-radius: 3px; }
+/* ── Config ── */
+#cfg{background:var(--surface);border-bottom:1px solid var(--border);padding:12px 16px;display:none;flex-direction:column;gap:8px;flex-shrink:0}
+#cfg.open{display:flex}
+#cfg label{font-size:11px;color:var(--dim);font-family:var(--fm);display:block;margin-bottom:2px}
+#cfg input{width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:7px 10px;border-radius:4px;font-family:var(--fm);font-size:12px;outline:none;transition:border-color .2s}
+#cfg input:focus{border-color:var(--accent)}
+#cfg-save{align-self:flex-end;background:var(--accent);color:#fff;border:none;padding:6px 16px;border-radius:4px;cursor:pointer;font-family:var(--fm);font-size:12px;font-weight:600}
+#cfg-hint{font-size:11px;color:var(--dim);line-height:1.5}
+#cfg-hint a{color:var(--accent)}
 
-  .msg {
-    padding: 5px 10px; border-radius: 4px; line-height: 1.5;
-    border-left: 2px solid transparent; word-break: break-word; transition: background 0.15s;
-  }
-  .msg:hover { background: rgba(255,255,255,0.02); }
-  .msg.own { background: var(--own-bg); border-left-color: var(--accent); }
-  .msg-id { font-family: var(--font-mono); font-size: 11px; font-weight: 600; color: var(--text-dim); margin-right: 6px; flex-shrink: 0; }
-  .msg.own .msg-id { color: var(--accent); }
-  .msg-body { color: var(--text); font-size: 13.5px; }
-  .msg-row { display: flex; align-items: baseline; gap: 0; flex-wrap: wrap; }
-  .msg-time { font-family: var(--font-mono); font-size: 10px; color: var(--text-dim); margin-left: auto; padding-left: 10px; flex-shrink: 0; opacity: 0; transition: opacity 0.2s; }
-  .msg:hover .msg-time { opacity: 1; }
-  .msg-system { text-align: center; color: var(--text-dim); font-size: 11px; font-family: var(--font-mono); padding: 8px 0; }
+/* ── No-token banner ── */
+#ntb{background:rgba(247,99,90,.08);border-bottom:1px solid rgba(247,99,90,.25);color:#f7a09a;font-size:11px;font-family:var(--fm);padding:8px 16px;display:none;align-items:center;gap:8px;flex-shrink:0}
+#ntb.on{display:flex}
+#ntb button{background:none;border:1px solid rgba(247,99,90,.4);color:#f7a09a;padding:2px 10px;border-radius:3px;cursor:pointer;font-family:var(--fm);font-size:11px;margin-left:auto}
 
-  /* Image messages */
-  .msg-image-link {
-    display: inline-block;
-    color: var(--accent);
-    font-family: var(--font-mono);
-    font-size: 12px;
-    text-decoration: underline;
-    text-decoration-color: rgba(79,142,247,0.4);
-    cursor: pointer;
-    margin-top: 2px;
-    word-break: break-all;
-  }
-  .msg-image-link:hover { text-decoration-color: var(--accent); }
-  .msg-image-preview {
-    display: block;
-    margin-top: 6px;
-    max-width: min(360px, 90%);
-    max-height: 260px;
-    object-fit: contain;
-    border-radius: 5px;
-    border: 1px solid var(--border);
-    cursor: pointer;
-    background: var(--bg);
-  }
-  .msg-image-preview.hidden { display: none; }
+/* ── Messages ── */
+#msgs{flex:1;overflow-y:auto;padding:14px 16px;display:flex;flex-direction:column;gap:1px}
+#msgs::-webkit-scrollbar{width:5px}
+#msgs::-webkit-scrollbar-thumb{background:var(--muted);border-radius:3px}
+.msg{padding:4px 10px;border-radius:4px;border-left:2px solid transparent;word-break:break-word}
+.msg:hover{background:rgba(255,255,255,.02)}
+.msg.own{background:var(--ownbg);border-left-color:var(--accent)}
+.mid{font-family:var(--fm);font-size:11px;font-weight:600;color:var(--dim);margin-right:5px}
+.msg.own .mid{color:var(--accent)}
+.mbody{color:var(--text);font-size:13.5px;line-height:1.5}
+.mrow{display:flex;align-items:baseline;flex-wrap:wrap}
+.mtime{font-family:var(--fm);font-size:10px;color:var(--dim);margin-left:auto;padding-left:10px;flex-shrink:0;opacity:0;transition:opacity .15s}
+.msg:hover .mtime{opacity:1}
+.msys{text-align:center;color:var(--dim);font-size:11px;font-family:var(--fm);padding:8px 0;opacity:.6}
+.mimg-lnk{display:inline-block;color:var(--accent);font-family:var(--fm);font-size:12px;text-decoration:underline;text-decoration-color:rgba(79,142,247,.4);cursor:pointer;word-break:break-all}
+.mimg-lnk:hover{text-decoration-color:var(--accent)}
+.mimg-prev{display:block;margin-top:5px;max-width:min(320px,90%);max-height:240px;object-fit:contain;border-radius:5px;border:1px solid var(--border);cursor:pointer;background:var(--bg)}
+.mimg-prev.h{display:none}
+#empty{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--dim);font-size:12px;font-family:var(--fm);gap:6px;text-align:center}
+#empty .big{font-size:26px;opacity:.25}
 
-  /* Lightbox */
-  #lightbox {
-    display: none;
-    position: fixed; inset: 0;
-    background: rgba(0,0,0,0.85);
-    z-index: 9999;
-    align-items: center;
-    justify-content: center;
-    cursor: zoom-out;
-  }
-  #lightbox.open { display: flex; }
-  #lightbox img {
-    max-width: 92vw; max-height: 92vh;
-    object-fit: contain;
-    border-radius: 6px;
-    box-shadow: 0 8px 40px rgba(0,0,0,0.6);
-    pointer-events: none;
-  }
-  #lightbox-close {
-    position: absolute; top: 16px; right: 20px;
-    color: rgba(255,255,255,0.6); font-size: 28px; cursor: pointer;
-    line-height: 1; background: none; border: none;
-    transition: color 0.2s;
-  }
-  #lightbox-close:hover { color: #fff; }
+/* ── Lightbox ── */
+#lb{display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9999;align-items:center;justify-content:center;cursor:zoom-out}
+#lb.open{display:flex}
+#lb img{max-width:92vw;max-height:92vh;object-fit:contain;border-radius:6px;pointer-events:none}
+#lb-x{position:absolute;top:16px;right:20px;color:rgba(255,255,255,.6);font-size:26px;cursor:pointer;background:none;border:none;line-height:1}
+#lb-x:hover{color:#fff}
 
-  #empty-state {
-    flex: 1; display: flex; flex-direction: column; align-items: center;
-    justify-content: center; color: var(--text-dim);
-    font-size: 12px; font-family: var(--font-mono); gap: 6px; text-align: center;
-  }
-  #empty-state .big { font-size: 28px; opacity: 0.3; }
+/* ── Image strip ── */
+#istrip{display:none;padding:8px 16px 0;background:var(--surface);border-top:1px solid var(--border);gap:8px;flex-wrap:wrap;flex-shrink:0}
+#istrip.on{display:flex}
+.ithw{position:relative;width:52px;height:52px}
+.ith{width:52px;height:52px;object-fit:cover;border-radius:4px;border:1px solid var(--border)}
+.ithrm{position:absolute;top:-5px;right:-5px;width:16px;height:16px;border-radius:50%;background:var(--err);color:#fff;border:none;cursor:pointer;font-size:10px;display:flex;align-items:center;justify-content:center}
 
-  /* Input bar */
-  #input-area {
-    display: flex; align-items: flex-end; gap: 8px;
-    padding: 10px 16px;
-    padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px));
-    background: var(--surface); border-top: 1px solid var(--border); flex-shrink: 0;
-  }
-  #message-input {
-    flex: 1; background: var(--bg); border: 1px solid var(--border); color: var(--text);
-    padding: 9px 12px; border-radius: 5px; font-family: var(--font-body); font-size: 13.5px;
-    line-height: 1.5; resize: none; min-height: 40px; max-height: 120px;
-    outline: none; transition: border-color 0.2s; overflow-y: auto;
-  }
-  #message-input:focus { border-color: var(--accent); }
-  #message-input::placeholder { color: var(--text-dim); }
+/* ── Input ── */
+#input-area{display:flex;align-items:flex-end;gap:8px;padding:10px 16px;padding-bottom:calc(10px + env(safe-area-inset-bottom,0px));background:var(--surface);border-top:1px solid var(--border);flex-shrink:0}
+#msgin{flex:1;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:9px 12px;border-radius:5px;font-family:var(--fb);font-size:13.5px;line-height:1.5;resize:none;min-height:40px;max-height:120px;outline:none;transition:border-color .2s;overflow-y:auto}
+#msgin:focus{border-color:var(--accent)}
+#msgin::placeholder{color:var(--dim)}
+#imgbtn{background:none;border:1px solid var(--border);color:var(--dim);padding:0 10px;border-radius:5px;cursor:pointer;height:40px;font-size:16px;flex-shrink:0;display:flex;align-items:center;justify-content:center;transition:border-color .2s,color .2s,background .2s}
+#imgbtn:hover{border-color:var(--accent);color:var(--accent);background:var(--adim)}
+#imgin{display:none}
+#sendbtn{background:var(--accent);color:#fff;border:none;padding:9px 16px;border-radius:5px;cursor:pointer;font-family:var(--fm);font-size:12px;font-weight:600;height:40px;flex-shrink:0;transition:opacity .2s,transform .1s}
+#sendbtn:hover{opacity:.85}
+#sendbtn:active{transform:scale(.97)}
+#sendbtn:disabled{opacity:.4;cursor:not-allowed}
 
-  #img-btn {
-    background: none; border: 1px solid var(--border); color: var(--text-dim);
-    padding: 0 10px; border-radius: 5px; cursor: pointer; height: 40px;
-    font-size: 16px; flex-shrink: 0; transition: border-color 0.2s, color 0.2s, background 0.2s;
-    display: flex; align-items: center; justify-content: center;
-  }
-  #img-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
-  #img-input { display: none; }
+/* ── Toast ── */
+#toast{position:fixed;bottom:70px;left:50%;transform:translateX(-50%) translateY(16px);background:var(--surface);border:1px solid var(--border);color:var(--text);padding:7px 14px;border-radius:5px;font-size:12px;font-family:var(--fm);opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;z-index:200;white-space:nowrap}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+#toast.err{border-color:var(--err);color:var(--err)}
+#toast.ok{border-color:var(--ok);color:var(--ok)}
 
-  /* Image upload preview strip */
-  #img-preview-strip {
-    display: none;
-    padding: 8px 16px 0;
-    background: var(--surface);
-    border-top: 1px solid var(--border);
-    gap: 8px;
-    flex-wrap: wrap;
-    flex-shrink: 0;
-  }
-  #img-preview-strip.has-images { display: flex; }
-  .img-thumb-wrap {
-    position: relative; width: 56px; height: 56px;
-  }
-  .img-thumb {
-    width: 56px; height: 56px; object-fit: cover;
-    border-radius: 4px; border: 1px solid var(--border);
-  }
-  .img-thumb-remove {
-    position: absolute; top: -5px; right: -5px;
-    width: 16px; height: 16px; border-radius: 50%;
-    background: var(--error); color: #fff; border: none;
-    cursor: pointer; font-size: 10px; font-weight: 700;
-    display: flex; align-items: center; justify-content: center;
-    line-height: 1;
-  }
+/* ── Modal ── */
+#mo{display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:300;align-items:center;justify-content:center;padding:20px}
+#mo.open{display:flex}
+#modal{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:22px;width:100%;max-width:380px;display:flex;flex-direction:column;gap:14px}
+.mtitle{font-family:var(--fm);font-size:13px;font-weight:600;color:var(--text)}
+.mtoggle{display:flex;border:1px solid var(--border);border-radius:5px;overflow:hidden}
+.tybtn{flex:1;background:none;border:none;color:var(--dim);padding:7px;font-family:var(--fm);font-size:12px;cursor:pointer;transition:background .15s,color .15s}
+.tybtn.on{background:var(--accent);color:#fff}
+.mf{display:flex;flex-direction:column;gap:4px}
+.mlabel{font-size:11px;color:var(--dim);font-family:var(--fm)}
+.min{background:var(--bg);border:1px solid var(--border);color:var(--text);padding:8px 10px;border-radius:4px;font-family:var(--fm);font-size:13px;outline:none;transition:border-color .2s;width:100%}
+.min:focus{border-color:var(--accent)}
+.min::placeholder{color:var(--dim)}
+.mrow2{display:flex;gap:6px}
+.mrow2 .min{flex:1}
+#add-mbr{background:none;border:1px solid var(--border);color:var(--dim);padding:8px 12px;border-radius:4px;cursor:pointer;font-family:var(--fm);font-size:12px;white-space:nowrap;transition:border-color .2s,color .2s;flex-shrink:0}
+#add-mbr:hover{border-color:var(--accent);color:var(--accent)}
+#chips{display:flex;flex-wrap:wrap;gap:5px;min-height:4px}
+.chip{display:inline-flex;align-items:center;gap:4px;background:var(--adim);border:1px solid rgba(79,142,247,.3);color:var(--accent);padding:2px 7px;border-radius:3px;font-family:var(--fm);font-size:11px;font-weight:600}
+.chiprm{background:none;border:none;color:var(--accent);cursor:pointer;font-size:14px;padding:0;line-height:1;opacity:.6}
+.chiprm:hover{opacity:1}
+.mhint{font-size:11px;color:var(--dim);line-height:1.55}
+.mactions{display:flex;gap:8px;justify-content:flex-end;padding-top:2px}
+.mcancel{background:none;border:1px solid var(--border);color:var(--dim);padding:7px 14px;border-radius:4px;cursor:pointer;font-family:var(--fm);font-size:12px}
+.mcancel:hover{border-color:var(--text);color:var(--text)}
+.mcreate{background:var(--accent);border:none;color:#fff;padding:7px 14px;border-radius:4px;cursor:pointer;font-family:var(--fm);font-size:12px;font-weight:600}
+.mcreate:hover{opacity:.85}
+.mcreate:disabled{opacity:.4;cursor:not-allowed}
 
-  #send-btn {
-    background: var(--accent); color: #fff; border: none;
-    padding: 9px 18px; border-radius: 5px; cursor: pointer;
-    font-family: var(--font-mono); font-size: 12px; font-weight: 600;
-    height: 40px; flex-shrink: 0;
-    transition: opacity 0.2s, transform 0.1s; letter-spacing: 0.03em;
-  }
-  #send-btn:hover { opacity: 0.85; }
-  #send-btn:active { transform: scale(0.97); }
-  #send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-
-  /* Toast */
-  #toast {
-    position: fixed; bottom: 60px; left: 50%;
-    transform: translateX(-50%) translateY(20px);
-    background: var(--surface); border: 1px solid var(--border); color: var(--text);
-    padding: 8px 16px; border-radius: 5px; font-size: 12px; font-family: var(--font-mono);
-    opacity: 0; pointer-events: none; transition: opacity 0.25s, transform 0.25s;
-    z-index: 100; white-space: nowrap;
-  }
-  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
-  #toast.err { border-color: var(--error); color: var(--error); }
-  #toast.ok { border-color: var(--success); color: var(--success); }
-
-  /* No-token banner */
-  #no-token-banner {
-    background: rgba(247,99,90,0.08); border-bottom: 1px solid rgba(247,99,90,0.25);
-    color: #f7a09a; font-size: 11px; font-family: var(--font-mono);
-    padding: 8px 16px; display: none; align-items: center; gap: 8px; flex-shrink: 0;
-  }
-  #no-token-banner.visible { display: flex; }
-  #no-token-banner button {
-    background: none; border: 1px solid rgba(247,99,90,0.4); color: #f7a09a;
-    padding: 2px 10px; border-radius: 3px; cursor: pointer;
-    font-family: var(--font-mono); font-size: 11px; margin-left: auto;
-  }
+/* ── Mobile ── */
+@media(max-width:620px){
+  #sb{position:absolute;inset:0;width:100%;z-index:10;transition:transform .22s cubic-bezier(.4,0,.2,1);border-right:none}
+  #main{position:absolute;inset:0;width:100%;transform:translateX(100%);transition:transform .22s cubic-bezier(.4,0,.2,1)}
+  #app.co #sb{transform:translateX(-100%)}
+  #app.co #main{transform:translateX(0)}
+  #back-btn{display:block}
+}
 </style>
 </head>
 <body>
 <div id="app">
-
-  <div id="header">
-    <div id="header-left">
-      <div id="status-dot"></div>
-      <span id="header-title">bkmk-chat</span>
-      <span id="status-text">connecting…</span>
+  <div id="sb">
+    <div id="sbh">
+      <span id="sb-title">bkmk-chat</span>
+      <span id="id-badge">—</span>
     </div>
-    <div id="header-right">
-      <span id="my-id-badge" title="Your device ID">—</span>
-      <button class="icon-btn" id="refresh-btn">↻ refresh</button>
-      <button class="icon-btn" id="config-btn">⚙ token</button>
+    <div id="chat-list"></div>
+    <div id="sbf">
+      <button class="sbbtn pri" id="new-btn">+ new chat</button>
+      <button class="sbbtn" id="cfg-btn">⚙ token</button>
     </div>
   </div>
-
-  <div id="config-panel">
-    <div>
-      <label>GitHub Personal Access Token (needs <code>public_repo</code> scope)</label>
-      <input type="password" id="token-input" placeholder="ghp_…" autocomplete="off" spellcheck="false">
+  <div id="main">
+    <div id="chdr">
+      <button id="back-btn">‹</button>
+      <span id="chat-name-disp"># main</span>
+      <div id="hdr-right">
+        <div id="sdot"></div>
+        <span id="stxt">connecting…</span>
+        <button class="ibtn" id="ref-btn">↻</button>
+        <button class="ibtn" id="del-btn">🗑 delete</button>
+      </div>
     </div>
-    <p id="config-hint">
-      Generate at <a href="https://github.com/settings/tokens/new?scopes=public_repo&description=BookmarkletChat" target="_blank">github.com/settings/tokens</a> — only <strong>public_repo</strong> scope needed. Stored in localStorage on this page's origin.
-    </p>
-    <button id="config-save">Save token</button>
-  </div>
-
-  <div id="no-token-banner">
-    <span>⚠ No GitHub token — you can read but not send.</span>
-    <button id="banner-config-btn">Set token</button>
-  </div>
-
-  <div id="messages">
-    <div id="empty-state">
-      <span class="big">◌</span>
-      <span>No messages yet</span>
+    <div id="cfg">
+      <div><label>GitHub token (public_repo scope)</label><input type="password" id="tok-in" placeholder="ghp_…" autocomplete="off" spellcheck="false"></div>
+      <p id="cfg-hint">Generate at <a href="https://github.com/settings/tokens/new?scopes=public_repo&description=BookmarkletChat" target="_blank">github.com/settings/tokens</a>. Stored locally.</p>
+      <button id="cfg-save">Save token</button>
+    </div>
+    <div id="ntb"><span>⚠ No token — read only.</span><button id="ntb-btn">Set token</button></div>
+    <div id="msgs"><div id="empty"><span class="big">◌</span><span>No messages yet</span></div></div>
+    <div id="istrip"></div>
+    <div id="input-area">
+      <textarea id="msgin" placeholder="Type a message…" rows="1" maxlength="2000"></textarea>
+      <button id="imgbtn" title="Attach image">🖼</button>
+      <input type="file" id="imgin" accept="image/*" multiple>
+      <button id="sendbtn">send</button>
     </div>
   </div>
-
-  <div id="img-preview-strip"></div>
-
-  <div id="input-area">
-    <textarea id="message-input" placeholder="Type a message…" rows="1" maxlength="2000"></textarea>
-    <button id="img-btn" title="Attach image">🖼</button>
-    <input type="file" id="img-input" accept="image/*" multiple>
-    <button id="send-btn">send</button>
-  </div>
-
 </div>
 
-<div id="lightbox">
-  <button id="lightbox-close">✕</button>
-  <img id="lightbox-img" src="" alt="">
+<div id="mo">
+  <div id="modal">
+    <div class="mtitle">New chat</div>
+    <div class="mtoggle">
+      <button class="tybtn on" id="ty-priv" onclick="setTy('private')">🔒 Private</button>
+      <button class="tybtn" id="ty-grp" onclick="setTy('group')">👥 Group</button>
+    </div>
+    <div class="mf"><label class="mlabel">Chat name</label><input class="min" id="m-name" placeholder="e.g. Secret plans…" maxlength="40"></div>
+    <div class="mf">
+      <label class="mlabel" id="m-mlabel">Other person's ID</label>
+      <div class="mrow2"><input class="min" id="m-mid" placeholder="XX0!" maxlength="4"><button id="add-mbr" onclick="addMbr()">add</button></div>
+      <div id="chips"></div>
+    </div>
+    <p class="mhint" id="m-hint">IDs are 4 chars: 2 letters, 1 digit, 1 symbol (e.g. AB3!). Private chats are 1-to-1 — either person can delete. Only you can delete a group.</p>
+    <div class="mactions"><button class="mcancel" onclick="closeMo()">cancel</button><button class="mcreate" id="m-create" onclick="submitChat()">create</button></div>
+  </div>
 </div>
 
+<div id="lb"><button id="lb-x">✕</button><img id="lb-img" src="" alt=""></div>
 <div id="toast"></div>
 
 <script>
-// ── Constants ────────────────────────────────────────────────────────────────
-const REPO_OWNER    = 'ToasterGG';
-const REPO_NAME     = 'Bookmarklet-Chat';
-const MESSAGES_FILE = 'messages.txt';
-const BRANCH        = 'main';
-const API_BASE      = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${MESSAGES_FILE}`;
-const IMG_DIR       = 'images';
-const IMG_API_BASE  = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${IMG_DIR}`;
-const RAW_BASE      = `https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${BRANCH}/${IMG_DIR}`;
-const POLL_MS       = 10000;
-const SYMBOLS       = ['!','$','%','&','*','@','#'];
-const LETTERS       = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-const DIGITS        = '0123456789';
+const OWNER='ToasterGG',REPO='Bookmarklet-Chat',BRANCH='main';
+const MFILE='messages.txt',CDIR='chats',IFILE='chats/index.json',IMGDIR='images';
+const RAW=`https://raw.githubusercontent.com/${OWNER}/${REPO}/${BRANCH}`;
+const API=`https://api.github.com/repos/${OWNER}/${REPO}/contents`;
+const POLL=10000,SYM=['!','$','%','&','*','@','#'],LET='ABCDEFGHIJKLMNOPQRSTUVWXYZ',DIG='0123456789';
+const SK_ID='bkmk_chat_id',SK_TK='bkmk_chat_token';
 
-// Storage key prefix — same key works whether running as file:// or data: URI
-const SK_ID    = 'bkmk_chat_id';
-const SK_TOKEN = 'bkmk_chat_token';
+let myID=null,ghTok=null,curChat='main',idx={chats:[]},idxSHA=null;
+let cSHAs={},cContents={},pollT=null,sending=false,pImgs=[],mTy='private',mMbrs=[],delStep=0,delT=null;
 
-// ── State ─────────────────────────────────────────────────────────────────────
-let myID        = null;
-let ghToken     = null;
-let fileSHA     = null;
-let pollTimer   = null;
-let lastContent = '';
-let isSending   = false;
-let pendingImgs = []; // [{file, dataURL, name}]
-
-// ── Storage helpers (tries localStorage, falls back to sessionStorage) ────────
-function store(key, val) {
-  try { localStorage.setItem(key, val); return; } catch(e) {}
-  try { sessionStorage.setItem(key, val); } catch(e) {}
-}
-function retrieve(key) {
-  try { const v = localStorage.getItem(key); if (v !== null) return v; } catch(e) {}
-  try { const v = sessionStorage.getItem(key); if (v !== null) return v; } catch(e) {}
-  // Last resort: check URL hash params (written by bookmarklet for data: URIs)
-  try {
-    const hash = location.hash.slice(1);
-    const params = new URLSearchParams(hash);
-    if (params.has(key)) return params.get(key);
-  } catch(e) {}
+// storage
+function store(k,v){try{localStorage.setItem(k,v);return}catch(e){}try{sessionStorage.setItem(k,v)}catch(e){}}
+function get(k){
+  try{const v=localStorage.getItem(k);if(v!==null)return v}catch(e){}
+  try{const v=sessionStorage.getItem(k);if(v!==null)return v}catch(e){}
+  try{const p=new URLSearchParams(location.hash.slice(1));if(p.has(k))return p.get(k)}catch(e){}
   return null;
 }
 
-// ── DOM refs ──────────────────────────────────────────────────────────────────
-const $messages      = document.getElementById('messages');
-const $input         = document.getElementById('message-input');
-const $sendBtn       = document.getElementById('send-btn');
-const $statusDot     = document.getElementById('status-dot');
-const $statusText    = document.getElementById('status-text');
-const $myIDBadge     = document.getElementById('my-id-badge');
-const $configPanel   = document.getElementById('config-panel');
-const $configBtn     = document.getElementById('config-btn');
-const $tokenInput    = document.getElementById('token-input');
-const $configSave    = document.getElementById('config-save');
-const $refreshBtn    = document.getElementById('refresh-btn');
-const $noTokenBanner = document.getElementById('no-token-banner');
-const $bannerCfgBtn  = document.getElementById('banner-config-btn');
-const $toast         = document.getElementById('toast');
-const $emptyState    = document.getElementById('empty-state');
-const $imgBtn        = document.getElementById('img-btn');
-const $imgInput      = document.getElementById('img-input');
-const $imgStrip      = document.getElementById('img-preview-strip');
-const $lightbox      = document.getElementById('lightbox');
-const $lightboxImg   = document.getElementById('lightbox-img');
-const $lightboxClose = document.getElementById('lightbox-close');
+// id
+function genID(){return LET[r(26)]+LET[r(26)]+DIG[r(10)]+SYM[r(SYM.length)]}
+function r(n){return Math.floor(Math.random()*n)}
+function getID(){let id=get(SK_ID);if(!id){id=genID();store(SK_ID,id)}return id}
+function validID(id){return /^[A-Z]{2}[0-9][!$%&*@#]$/.test(id)}
+function genCID(ty){const c='abcdefghijklmnopqrstuvwxyz0123456789';let id=(ty==='private'?'p_':'g_');for(let i=0;i<8;i++)id+=c[r(c.length)];return id}
 
-// ── ID generation ─────────────────────────────────────────────────────────────
-function generateID() {
-  const l1 = LETTERS[Math.floor(Math.random() * LETTERS.length)];
-  const l2 = LETTERS[Math.floor(Math.random() * LETTERS.length)];
-  const n1 = DIGITS[Math.floor(Math.random() * DIGITS.length)];
-  const s1 = SYMBOLS[Math.floor(Math.random() * SYMBOLS.length)];
-  return `${l1}${l2}${n1}${s1}`;
+// token
+function loadTok(){return get(SK_TK)}
+function saveTok(t){store(SK_TK,t);try{window.parent.postMessage({type:'BKMK_STORE',key:SK_TK,val:t},'*');window.parent.postMessage({type:'BKMK_STORE',key:SK_ID,val:myID},'*')}catch(e){}}
+
+function tokUI(){
+  const has=!!ghTok;
+  document.getElementById('ntb').classList.toggle('on',!has);
+  document.getElementById('sendbtn').disabled=!has;
 }
 
-function getOrCreateID() {
-  let id = retrieve(SK_ID);
-  if (!id) {
-    id = generateID();
-    store(SK_ID, id);
+// api helpers
+function chatURL(id){return id==='main'?`${API}/${MFILE}`:`${API}/${CDIR}/${id}.txt`}
+function ghH(ex={}){const h={'Accept':'application/vnd.github+json',...ex};if(ghTok)h['Authorization']=`Bearer ${ghTok}`;return h}
+async function ghPUT(url,body){
+  const res=await fetch(url,{method:'PUT',headers:ghH({'Content-Type':'application/json'}),body:JSON.stringify(body)});
+  if(!res.ok){const e=await res.json().catch(()=>({}));throw new Error(e.message||`HTTP ${res.status}`)}
+  return res.json();
+}
+async function ghDEL(url,body){
+  const res=await fetch(url,{method:'DELETE',headers:ghH({'Content-Type':'application/json'}),body:JSON.stringify(body)});
+  if(!res.ok){const e=await res.json().catch(()=>({}));throw new Error(e.message||`HTTP ${res.status}`)}
+}
+
+// status/toast
+function setS(cls,txt){document.getElementById('sdot').className=cls;document.getElementById('stxt').textContent=txt}
+let toastT;
+function toast(msg,ty=''){const el=document.getElementById('toast');el.textContent=msg;el.className='show'+(ty?' '+ty:'');clearTimeout(toastT);toastT=setTimeout(()=>el.className='',2800)}
+
+// encode
+function enc(s){return btoa(unescape(encodeURIComponent(s)))}
+function dec(b){return atob(b.replace(/\n/g,''))}
+
+// index
+async function fetchIdx(){
+  try{
+    const res=await fetch(`${API}/${IFILE}?t=${Date.now()}`,{headers:ghH()});
+    if(res.status===404){idx={chats:[]};idxSHA=null;return}
+    if(!res.ok)return;
+    const data=await res.json();
+    idxSHA=data.sha;
+    idx=JSON.parse(dec(data.content));
+  }catch(e){console.warn('[chat] idx:',e)}
+}
+async function pushIdx(){
+  const body={message:'update index',content:enc(JSON.stringify(idx,null,2)),branch:BRANCH};
+  if(idxSHA)body.sha=idxSHA;
+  const data=await ghPUT(`${API}/${IFILE}`,body);
+  idxSHA=data.content.sha;
+}
+function myChats(){return idx.chats.filter(c=>c.members.includes(myID))}
+
+// messages
+async function fetchMsgs(id,silent=false){
+  if(!silent)setS('','loading…');
+  try{
+    const res=await fetch(`${chatURL(id)}?ref=${BRANCH}&t=${Date.now()}`,{headers:ghH()});
+    if(res.status===404){cSHAs[id]=null;cContents[id]='';if(id===curChat)renderMsgs('');setS('live','live · no messages');return}
+    if(!res.ok)throw new Error(`HTTP ${res.status}`);
+    const data=await res.json();
+    cSHAs[id]=data.sha;
+    const content=dec(data.content);
+    if(content!==cContents[id]){cContents[id]=content;if(id===curChat)renderMsgs(content)}
+    setS('live',`live · ${new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}`);
+  }catch(e){setS('err','error');if(!silent)toast('Load failed: '+e.message,'err')}
+}
+
+// poll
+async function poll(){
+  await fetchIdx();
+  // if current chat was deleted, go home
+  if(curChat!=='main'&&!myChats().some(c=>c.id===curChat)){
+    toast('That chat was deleted','err');
+    selectChat('main');
+    return;
   }
-  return id;
+  renderSB();
+  await fetchMsgs(curChat,true);
+}
+function startPoll(){clearInterval(pollT);pollT=setInterval(poll,POLL)}
+
+// sidebar
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
+function renderSB(){
+  const mine=myChats(),privs=mine.filter(c=>c.type==='private'),grps=mine.filter(c=>c.type==='group');
+  let h=`<div class="ci${curChat==='main'?' active':''}" onclick="selectChat('main')"><span class="ci-icon">#</span><span class="ci-name">main</span></div>`;
+  if(privs.length){h+=`<div class="cl-label">Private</div>`;for(const c of privs)h+=`<div class="ci${curChat===c.id?' active':''}" onclick="selectChat('${c.id}')"><span class="ci-icon">🔒</span><span class="ci-name">${esc(c.name)}</span></div>`}
+  if(grps.length){h+=`<div class="cl-label">Groups</div>`;for(const c of grps)h+=`<div class="ci${curChat===c.id?' active':''}" onclick="selectChat('${c.id}')"><span class="ci-icon">👥</span><span class="ci-name">${esc(c.name)}</span></div>`}
+  document.getElementById('chat-list').innerHTML=h;
 }
 
-// ── Token ─────────────────────────────────────────────────────────────────────
-function loadToken()  { return retrieve(SK_TOKEN); }
-function saveToken(t) { store(SK_TOKEN, t); }
-
-function updateTokenUI() {
-  if (ghToken) {
-    $noTokenBanner.classList.remove('visible');
-    $sendBtn.disabled = false;
-  } else {
-    $noTokenBanner.classList.add('visible');
-    $sendBtn.disabled = true;
+// select chat
+function selectChat(id){
+  curChat=id;
+  let label='# main',canDel=false;
+  if(id!=='main'){
+    const c=idx.chats.find(x=>x.id===id);
+    if(c){label=(c.type==='private'?'🔒 ':'👥 ')+c.name;canDel=c.type==='private'?c.members.includes(myID):c.creator===myID}
   }
+  document.getElementById('chat-name-disp').textContent=label;
+  const db=document.getElementById('del-btn');
+  db.style.display=(id!=='main'&&canDel)?'':'none';
+  db.textContent='🗑 delete';db.classList.remove('confirming');
+  delStep=0;clearTimeout(delT);
+  renderSB();
+  document.getElementById('app').classList.add('co');
+  if(cContents[id]!==undefined)renderMsgs(cContents[id]);
+  else{document.getElementById('empty').style.display='flex';fetchMsgs(id,false)}
+  document.getElementById('msgin').value='';
+  autoR();scrollBot(false);
 }
 
-// ── Toast ─────────────────────────────────────────────────────────────────────
-let toastTimer = null;
-function toast(msg, type = '') {
-  $toast.textContent = msg;
-  $toast.className = 'show' + (type ? ' ' + type : '');
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => { $toast.className = ''; }, 2800);
-}
-
-// ── Status ────────────────────────────────────────────────────────────────────
-function setStatus(state, text) {
-  $statusDot.className = state;
-  $statusText.textContent = text;
-}
-
-// ── Fetch messages ────────────────────────────────────────────────────────────
-async function fetchMessages(silent = false) {
-  if (!silent) setStatus('', 'loading…');
-  try {
-    const headers = { 'Accept': 'application/vnd.github+json' };
-    if (ghToken) headers['Authorization'] = `Bearer ${ghToken}`;
-
-    const res = await fetch(`${API_BASE}?ref=${BRANCH}&t=${Date.now()}`, { headers });
-
-    if (res.status === 404) {
-      fileSHA = null; lastContent = '';
-      renderMessages('');
-      setStatus('live', 'live · no messages yet');
-      return;
-    }
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.message || `HTTP ${res.status}`);
-    }
-
-    const data = await res.json();
-    fileSHA = data.sha;
-    const content = atob(data.content.replace(/\n/g, ''));
-    if (content !== lastContent) {
-      lastContent = content;
-      renderMessages(content);
-    }
-    setStatus('live', `live · ${new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}`);
-  } catch(e) {
-    setStatus('error', 'error — retrying');
-    if (!silent) toast('Failed to load: ' + e.message, 'err');
+// render messages
+const IMGRE=/^\[img:([^\]]+)\]$/;
+function parseTs(l){const m=l.match(/^\[(\d{2}:\d{2})\] /);return m?{t:m[1],r:l.slice(m[0].length)}:{t:null,r:l}}
+function renderMsgs(content){
+  const atBot=isBot();
+  const lines=content?content.split('\n').filter(l=>l.trim()):[];
+  const $m=document.getElementById('msgs'),$e=document.getElementById('empty');
+  $e.style.display=lines.length?'none':'flex';
+  $m.querySelectorAll('.msg,.msys').forEach(el=>el.remove());
+  if(!lines.length)return;
+  const frag=document.createDocumentFragment();
+  for(const line of lines){
+    const{t,r}=parseTs(line);const ci=r.indexOf(': ');
+    if(ci===-1){const el=document.createElement('div');el.className='msys';el.textContent=r;frag.appendChild(el);continue}
+    const id=r.slice(0,ci),msg=r.slice(ci+2),own=id===myID,imgM=msg.match(IMGRE);
+    const el=document.createElement('div');el.className='msg'+(own?' own':'');
+    const row=document.createElement('div');row.className='mrow';
+    const ids=document.createElement('span');ids.className='mid';ids.textContent=id+':';row.appendChild(ids);
+    if(imgM){
+      const fn=imgM[1],url=`${RAW}/${IMGDIR}/${fn}`;
+      const wrap=document.createElement('span');wrap.className='mbody';
+      const lnk=document.createElement('a');lnk.className='mimg-lnk';lnk.textContent=fn;lnk.href='#';
+      lnk.addEventListener('click',e=>{e.preventDefault();const p=wrap.querySelector('.mimg-prev');if(p)p.classList.toggle('h')});
+      wrap.appendChild(document.createTextNode(' '));wrap.appendChild(lnk);
+      const prev=document.createElement('img');prev.className='mimg-prev h';prev.src=url;prev.alt=fn;
+      prev.addEventListener('click',()=>openLB(url));prev.addEventListener('error',()=>{prev.style.display='none'});
+      wrap.appendChild(prev);row.appendChild(wrap);
+    }else{const bs=document.createElement('span');bs.className='mbody';bs.textContent=' '+msg;row.appendChild(bs)}
+    if(t){const ts=document.createElement('span');ts.className='mtime';ts.textContent=t;row.appendChild(ts)}
+    el.appendChild(row);frag.appendChild(el);
   }
+  $m.appendChild(frag);if(atBot)scrollBot(false);
 }
 
-// ── Render messages ───────────────────────────────────────────────────────────
-function parseTimestamp(line) {
-  const m = line.match(/^\[(\d{2}:\d{2})\] /);
-  if (m) return { time: m[1], rest: line.slice(m[0].length) };
-  return { time: null, rest: line };
+// send
+async function sendMsg(){
+  if(sending||!ghTok)return;
+  const text=document.getElementById('msgin').value.trim();
+  if(!text&&!pImgs.length)return;
+  const $s=document.getElementById('sendbtn');
+  sending=true;$s.disabled=true;$s.textContent='…';
+  try{
+    const fns=[];
+    for(const img of pImgs){$s.textContent='↑ img';fns.push(await uploadImg(img))}
+    const res=await fetch(`${chatURL(curChat)}?ref=${BRANCH}&t=${Date.now()}`,{headers:ghH()});
+    let cur='',cSHA=null;
+    if(res.ok){const d=await res.json();cSHA=d.sha;cur=dec(d.content)}
+    else if(res.status!==404)throw new Error(`HTTP ${res.status}`);
+    const now=new Date(),ts=`${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+    const nl=[];
+    if(text)nl.push(`[${ts}] ${myID}: ${text}`);
+    for(const fn of fns)nl.push(`[${ts}] ${myID}: [img:${fn}]`);
+    const nc=cur?cur+'\n'+nl.join('\n'):nl.join('\n');
+    const body={message:`chat: ${myID}`,content:enc(nc),branch:BRANCH};
+    if(cSHA)body.sha=cSHA;
+    const result=await ghPUT(chatURL(curChat),body);
+    cSHAs[curChat]=result.content.sha;
+    document.getElementById('msgin').value='';pImgs=[];renderStrip();autoR();
+    cContents[curChat]=nc;renderMsgs(nc);scrollBot(true);
+    setS('live',`live · ${new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}`);
+  }catch(e){toast('Send failed: '+e.message,'err')}
+  finally{sending=false;$s.disabled=false;$s.textContent='send'}
 }
 
-// Detect image lines: [time] ID: [img:filename.ext]
-const IMG_RE = /^\[img:([^\]]+)\]$/;
-
-function renderMessages(content) {
-  const wasAtBottom = isAtBottom();
-  const lines = content ? content.split('\n').filter(l => l.trim()) : [];
-
-  $emptyState.style.display = lines.length ? 'none' : 'flex';
-  $messages.querySelectorAll('.msg, .msg-system').forEach(el => el.remove());
-  if (!lines.length) return;
-
-  const frag = document.createDocumentFragment();
-
-  for (const line of lines) {
-    const { time, rest } = parseTimestamp(line);
-    const colonIdx = rest.indexOf(': ');
-
-    if (colonIdx === -1) {
-      const el = document.createElement('div');
-      el.className = 'msg-system';
-      el.textContent = rest;
-      frag.appendChild(el);
-      continue;
-    }
-
-    const id  = rest.slice(0, colonIdx);
-    const msg = rest.slice(colonIdx + 2);
-    const isOwn = id === myID;
-    const imgMatch = msg.match(IMG_RE);
-
-    const el = document.createElement('div');
-    el.className = 'msg' + (isOwn ? ' own' : '');
-
-    const row = document.createElement('div');
-    row.className = 'msg-row';
-
-    const idSpan = document.createElement('span');
-    idSpan.className = 'msg-id';
-    idSpan.textContent = id + ':';
-    row.appendChild(idSpan);
-
-    if (imgMatch) {
-      const filename = imgMatch[1];
-      const imgUrl   = `${RAW_BASE}/${filename}`;
-
-      const wrap = document.createElement('span');
-      wrap.className = 'msg-body';
-
-      const link = document.createElement('a');
-      link.className = 'msg-image-link';
-      link.textContent = filename;
-      link.href = '#';
-      link.addEventListener('click', e => {
-        e.preventDefault();
-        const preview = wrap.querySelector('.msg-image-preview');
-        if (preview) {
-          preview.classList.toggle('hidden');
-        }
-      });
-      wrap.appendChild(document.createTextNode(' '));
-      wrap.appendChild(link);
-
-      // Inline preview (hidden by default, click filename to show)
-      const preview = document.createElement('img');
-      preview.className = 'msg-image-preview hidden';
-      preview.src = imgUrl;
-      preview.alt = filename;
-      preview.addEventListener('click', () => openLightbox(imgUrl));
-      preview.addEventListener('error', () => { preview.style.display = 'none'; });
-      wrap.appendChild(preview);
-
-      row.appendChild(wrap);
-    } else {
-      const bodySpan = document.createElement('span');
-      bodySpan.className = 'msg-body';
-      bodySpan.textContent = ' ' + msg;
-      row.appendChild(bodySpan);
-    }
-
-    if (time) {
-      const timeSpan = document.createElement('span');
-      timeSpan.className = 'msg-time';
-      timeSpan.textContent = time;
-      row.appendChild(timeSpan);
-    }
-
-    el.appendChild(row);
-    frag.appendChild(el);
-  }
-
-  $messages.appendChild(frag);
-  if (wasAtBottom) scrollToBottom(false);
+// img upload
+async function uploadImg(imgObj){
+  const ts=Date.now(),safe=imgObj.file.name.replace(/[^a-zA-Z0-9._-]/g,'_'),fn=`${ts}_${safe}`;
+  await ghPUT(`${API}/${IMGDIR}/${fn}`,{message:`img: ${myID}`,content:imgObj.dataURL.split(',')[1],branch:BRANCH});
+  return fn;
 }
 
-// ── Lightbox ──────────────────────────────────────────────────────────────────
-function openLightbox(src) {
-  $lightboxImg.src = src;
-  $lightbox.classList.add('open');
-}
-function closeLightbox() {
-  $lightbox.classList.remove('open');
-  $lightboxImg.src = '';
-}
-$lightbox.addEventListener('click', e => { if (e.target === $lightbox) closeLightbox(); });
-$lightboxClose.addEventListener('click', closeLightbox);
-document.addEventListener('keydown', e => { if (e.key === 'Escape') closeLightbox(); });
-
-// ── Scroll ────────────────────────────────────────────────────────────────────
-function isAtBottom() {
-  return $messages.scrollHeight - $messages.scrollTop - $messages.clientHeight < 80;
-}
-function scrollToBottom(smooth = true) {
-  $messages.scrollTo({ top: $messages.scrollHeight, behavior: smooth ? 'smooth' : 'instant' });
+// create chat
+async function createChat(ty,name,mbrs){
+  if(!ghTok){toast('Set your token first','err');return}
+  const id=genCID(ty),allM=[...new Set([myID,...mbrs])];
+  await fetchIdx();
+  idx.chats.push({id,type:ty,name,members:allM,creator:myID,createdAt:new Date().toISOString()});
+  await pushIdx();
+  const init=`[system] ${name} created`;
+  await ghPUT(`${API}/${CDIR}/${id}.txt`,{message:`create: ${name}`,content:enc(init),branch:BRANCH});
+  cContents[id]=init;
+  renderSB();selectChat(id);
+  toast(`"${name}" created`,'ok');
 }
 
-// ── Image pending queue ───────────────────────────────────────────────────────
-function addPendingImages(files) {
-  for (const file of files) {
-    if (!file.type.startsWith('image/')) continue;
-    const reader = new FileReader();
-    reader.onload = e => {
-      pendingImgs.push({ file, dataURL: e.target.result, name: file.name });
-      renderImgStrip();
-    };
-    reader.readAsDataURL(file);
-  }
+// delete chat
+async function deleteChat(id){
+  if(!ghTok)return;
+  try{
+    await fetchIdx();
+    idx.chats=idx.chats.filter(c=>c.id!==id);
+    await pushIdx();
+    const fr=await fetch(`${chatURL(id)}?ref=${BRANCH}&t=${Date.now()}`,{headers:ghH()});
+    if(fr.ok){const d=await fr.json();await ghDEL(chatURL(id),{message:`delete: ${id}`,sha:d.sha,branch:BRANCH})}
+    delete cSHAs[id];delete cContents[id];
+    selectChat('main');renderSB();toast('Chat deleted','ok');
+  }catch(e){toast('Delete failed: '+e.message,'err')}
 }
 
-function renderImgStrip() {
-  $imgStrip.innerHTML = '';
-  if (!pendingImgs.length) { $imgStrip.classList.remove('has-images'); return; }
-  $imgStrip.classList.add('has-images');
-  pendingImgs.forEach((img, i) => {
-    const wrap = document.createElement('div');
-    wrap.className = 'img-thumb-wrap';
-    const thumb = document.createElement('img');
-    thumb.className = 'img-thumb';
-    thumb.src = img.dataURL;
-    const rm = document.createElement('button');
-    rm.className = 'img-thumb-remove';
-    rm.textContent = '✕';
-    rm.addEventListener('click', () => { pendingImgs.splice(i, 1); renderImgStrip(); });
-    wrap.appendChild(thumb);
-    wrap.appendChild(rm);
-    $imgStrip.appendChild(wrap);
-  });
+// delete btn (2-step)
+function handleDel(){
+  if(delStep===0){
+    delStep=1;
+    const db=document.getElementById('del-btn');
+    db.textContent='⚠ confirm?';db.classList.add('confirming');
+    delT=setTimeout(()=>{delStep=0;db.textContent='🗑 delete';db.classList.remove('confirming')},3000);
+  }else{clearTimeout(delT);delStep=0;deleteChat(curChat)}
 }
 
-// ── Upload image to GitHub ────────────────────────────────────────────────────
-async function uploadImage(imgObj) {
-  // Unique filename: timestamp + original name
-  const ts = Date.now();
-  const safeName = imgObj.file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-  const filename = `${ts}_${safeName}`;
-  const path = `${IMG_DIR}/${filename}`;
-  const apiUrl = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${path}`;
-
-  // Convert dataURL to base64 only
-  const b64 = imgObj.dataURL.split(',')[1];
-
-  const headers = {
-    'Accept': 'application/vnd.github+json',
-    'Authorization': `Bearer ${ghToken}`,
-    'Content-Type': 'application/json',
-  };
-  const body = JSON.stringify({
-    message: `img: ${myID} ${filename}`,
-    content: b64,
-    branch: BRANCH,
-  });
-
-  const res = await fetch(apiUrl, { method: 'PUT', headers, body });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.message || `HTTP ${res.status}`);
-  }
-  return filename;
+// modal
+function openMo(){
+  mTy='private';mMbrs=[];
+  document.getElementById('m-name').value='';document.getElementById('m-mid').value='';
+  document.getElementById('chips').innerHTML='';
+  setTy('private');
+  document.getElementById('mo').classList.add('open');
+  setTimeout(()=>document.getElementById('m-name').focus(),80);
+}
+function closeMo(){document.getElementById('mo').classList.remove('open')}
+function setTy(t){
+  mTy=t;
+  document.getElementById('ty-priv').classList.toggle('on',t==='private');
+  document.getElementById('ty-grp').classList.toggle('on',t==='group');
+  document.getElementById('m-mlabel').textContent=t==='private'?"Other person's ID":"Add members by ID";
+  if(t==='private'&&mMbrs.length>1){mMbrs=[mMbrs[0]];renderChips()}
+}
+function addMbr(){
+  const input=document.getElementById('m-mid');
+  const val=input.value.trim().toUpperCase();
+  if(!validID(val)){toast('Invalid ID — must be like AB3!','err');return}
+  if(val===myID){toast("That's your own ID",'err');return}
+  if(mMbrs.includes(val)){toast('Already added','err');return}
+  if(mTy==='private'&&mMbrs.length>=1){toast('Private chats are 1-to-1','err');return}
+  mMbrs.push(val);input.value='';renderChips();
+}
+function rmMbr(id){mMbrs=mMbrs.filter(m=>m!==id);renderChips()}
+function renderChips(){document.getElementById('chips').innerHTML=mMbrs.map(m=>`<span class="chip">${esc(m)}<button class="chiprm" onclick="rmMbr('${m}')">×</button></span>`).join('')}
+async function submitChat(){
+  const name=document.getElementById('m-name').value.trim();
+  if(!name){toast('Give the chat a name','err');return}
+  if(!mMbrs.length){toast('Add at least one member','err');return}
+  const btn=document.getElementById('m-create');
+  btn.disabled=true;btn.textContent='creating…';
+  try{await createChat(mTy,name,mMbrs);closeMo()}
+  catch(e){toast('Failed: '+e.message,'err')}
+  finally{btn.disabled=false;btn.textContent='create'}
 }
 
-// ── Send message ──────────────────────────────────────────────────────────────
-async function sendMessage() {
-  if (isSending || !ghToken) return;
-  const text = $input.value.trim();
-  if (!text && !pendingImgs.length) return;
+// scroll
+function isBot(){const $m=document.getElementById('msgs');return $m.scrollHeight-$m.scrollTop-$m.clientHeight<80}
+function scrollBot(smooth=true){const $m=document.getElementById('msgs');$m.scrollTo({top:$m.scrollHeight,behavior:smooth?'smooth':'instant'})}
+function autoR(){const i=document.getElementById('msgin');i.style.height='auto';i.style.height=Math.min(i.scrollHeight,120)+'px'}
 
-  isSending = true;
-  $sendBtn.disabled = true;
-  $sendBtn.textContent = '…';
-
-  try {
-    // Upload any images first
-    const uploadedFilenames = [];
-    for (const img of pendingImgs) {
-      $sendBtn.textContent = '↑ img';
-      const filename = await uploadImage(img);
-      uploadedFilenames.push(filename);
-    }
-
-    // Fetch latest file state
-    const headersRead = {
-      'Accept': 'application/vnd.github+json',
-      'Authorization': `Bearer ${ghToken}`,
-    };
-    const resCheck = await fetch(`${API_BASE}?ref=${BRANCH}&t=${Date.now()}`, { headers: headersRead });
-
-    let currentContent = '';
-    let currentSHA     = null;
-
-    if (resCheck.ok) {
-      const data    = await resCheck.json();
-      currentSHA    = data.sha;
-      currentContent = atob(data.content.replace(/\n/g, ''));
-    } else if (resCheck.status !== 404) {
-      throw new Error(`HTTP ${resCheck.status} reading file`);
-    }
-
-    const now     = new Date();
-    const timeStr = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
-    const newLines = [];
-
-    if (text) newLines.push(`[${timeStr}] ${myID}: ${text}`);
-    for (const fn of uploadedFilenames) {
-      newLines.push(`[${timeStr}] ${myID}: [img:${fn}]`);
-    }
-
-    const newContent = currentContent
-      ? currentContent + '\n' + newLines.join('\n')
-      : newLines.join('\n');
-
-    const encoded = btoa(unescape(encodeURIComponent(newContent)));
-    const putBody = { message: `chat: ${myID}`, content: encoded, branch: BRANCH };
-    if (currentSHA) putBody.sha = currentSHA;
-
-    const headers = {
-      'Accept': 'application/vnd.github+json',
-      'Authorization': `Bearer ${ghToken}`,
-      'Content-Type': 'application/json',
-    };
-
-    const res = await fetch(API_BASE, { method: 'PUT', headers, body: JSON.stringify(putBody) });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.message || `HTTP ${res.status}`);
-    }
-
-    const result = await res.json();
-    fileSHA = result.content.sha;
-
-    $input.value = '';
-    pendingImgs = [];
-    renderImgStrip();
-    autoResizeInput();
-
-    lastContent = newContent;
-    renderMessages(newContent);
-    scrollToBottom(true);
-    setStatus('live', `live · ${new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}`);
-
-  } catch(e) {
-    toast('Send failed: ' + e.message, 'err');
-  } finally {
-    isSending    = false;
-    $sendBtn.disabled = false;
-    $sendBtn.textContent = 'send';
-  }
+// img strip
+function addPImgs(files){for(const f of files){if(!f.type.startsWith('image/'))continue;const rd=new FileReader();rd.onload=e=>{pImgs.push({file:f,dataURL:e.target.result,name:f.name});renderStrip()};rd.readAsDataURL(f)}}
+function renderStrip(){
+  const s=document.getElementById('istrip');s.innerHTML='';
+  if(!pImgs.length){s.classList.remove('on');return}
+  s.classList.add('on');
+  pImgs.forEach((img,i)=>{const w=document.createElement('div');w.className='ithw';const t=document.createElement('img');t.className='ith';t.src=img.dataURL;const rm=document.createElement('button');rm.className='ithrm';rm.textContent='✕';rm.addEventListener('click',()=>{pImgs.splice(i,1);renderStrip()});w.appendChild(t);w.appendChild(rm);s.appendChild(w)});
 }
 
-// ── Input auto-resize ─────────────────────────────────────────────────────────
-function autoResizeInput() {
-  $input.style.height = 'auto';
-  $input.style.height = Math.min($input.scrollHeight, 120) + 'px';
+// lightbox
+function openLB(src){document.getElementById('lb-img').src=src;document.getElementById('lb').classList.add('open')}
+function closeLB(){document.getElementById('lb').classList.remove('open');document.getElementById('lb-img').src=''}
+
+// viewport fix
+function setVH(){const h=window.visualViewport?window.visualViewport.height:window.innerHeight;document.documentElement.style.setProperty('--vh',h+'px')}
+setVH();
+if(window.visualViewport){window.visualViewport.addEventListener('resize',setVH);window.visualViewport.addEventListener('scroll',setVH)}
+else window.addEventListener('resize',setVH);
+
+// init
+function init(){
+  myID=getID();ghTok=loadTok();
+  document.getElementById('id-badge').textContent=myID;
+  if(ghTok)document.getElementById('tok-in').value=ghTok;
+  tokUI();
+  fetchIdx().then(()=>{renderSB();fetchMsgs('main',false)});
+  startPoll();
 }
 
-// ── Polling ───────────────────────────────────────────────────────────────────
-function startPolling() {
-  clearInterval(pollTimer);
-  pollTimer = setInterval(() => fetchMessages(true), POLL_MS);
-}
-
-// ── Init ──────────────────────────────────────────────────────────────────────
-function init() {
-  myID    = getOrCreateID();
-  ghToken = loadToken();
-
-  $myIDBadge.textContent = myID;
-  if (ghToken) $tokenInput.value = ghToken;
-
-  updateTokenUI();
-  fetchMessages(false);
-  startPolling();
-}
-
-// ── Event listeners ───────────────────────────────────────────────────────────
-$sendBtn.addEventListener('click', sendMessage);
-
-$input.addEventListener('keydown', e => {
-  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+// events
+document.getElementById('sendbtn').addEventListener('click',sendMsg);
+document.getElementById('msgin').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendMsg()}});
+document.getElementById('msgin').addEventListener('input',autoR);
+document.getElementById('ref-btn').addEventListener('click',()=>{fetchMsgs(curChat,false);startPoll()});
+document.getElementById('cfg-btn').addEventListener('click',()=>document.getElementById('cfg').classList.toggle('open'));
+document.getElementById('ntb-btn').addEventListener('click',()=>document.getElementById('cfg').classList.add('open'));
+document.getElementById('cfg-save').addEventListener('click',()=>{
+  const t=document.getElementById('tok-in').value.trim();
+  if(!t){toast('Enter a token first','err');return}
+  ghTok=t;saveTok(t);document.getElementById('cfg').classList.remove('open');tokUI();toast('Token saved ✓','ok');fetchMsgs(curChat,false);
 });
-$input.addEventListener('input', autoResizeInput);
+document.getElementById('tok-in').addEventListener('keydown',e=>{if(e.key==='Enter')document.getElementById('cfg-save').click()});
+document.getElementById('new-btn').addEventListener('click',openMo);
+document.getElementById('mo').addEventListener('click',e=>{if(e.target===document.getElementById('mo'))closeMo()});
+document.getElementById('m-mid').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();addMbr()}});
+document.getElementById('m-name').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();document.getElementById('m-mid').focus()}});
+document.getElementById('del-btn').addEventListener('click',handleDel);
+document.getElementById('back-btn').addEventListener('click',()=>document.getElementById('app').classList.remove('co'));
+document.getElementById('imgbtn').addEventListener('click',()=>document.getElementById('imgin').click());
+document.getElementById('imgin').addEventListener('change',()=>{if(document.getElementById('imgin').files.length)addPImgs(Array.from(document.getElementById('imgin').files));document.getElementById('imgin').value=''});
+document.addEventListener('paste',e=>{const f=Array.from(e.clipboardData.files).filter(f=>f.type.startsWith('image/'));if(f.length)addPImgs(f)});
+document.getElementById('lb').addEventListener('click',e=>{if(e.target===document.getElementById('lb'))closeLB()});
+document.getElementById('lb-x').addEventListener('click',closeLB);
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeLB();closeMo()}});
 
-$refreshBtn.addEventListener('click', () => { fetchMessages(false); startPolling(); });
-
-$configBtn.addEventListener('click', () => $configPanel.classList.toggle('open'));
-
-$bannerCfgBtn.addEventListener('click', () => $configPanel.classList.add('open'));
-
-$configSave.addEventListener('click', () => {
-  const t = $tokenInput.value.trim();
-  if (!t) { toast('Enter a token first', 'err'); return; }
-  ghToken = t;
-  saveToken(t);
-  $configPanel.classList.remove('open');
-  updateTokenUI();
-  toast('Token saved ✓', 'ok');
-  fetchMessages(false);
-});
-
-$tokenInput.addEventListener('keydown', e => { if (e.key === 'Enter') $configSave.click(); });
-
-$imgBtn.addEventListener('click', () => $imgInput.click());
-$imgInput.addEventListener('change', () => {
-  if ($imgInput.files.length) addPendingImages(Array.from($imgInput.files));
-  $imgInput.value = '';
-});
-
-// Paste image from clipboard
-document.addEventListener('paste', e => {
-  const files = Array.from(e.clipboardData.files).filter(f => f.type.startsWith('image/'));
-  if (files.length) addPendingImages(files);
-});
-
-// Boot
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', init);
-} else {
-  init();
-}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);
+else init();
 </script>
 </body>
 </html>
