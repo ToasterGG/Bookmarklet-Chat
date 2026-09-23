@@ -236,11 +236,23 @@ let myID=null,ghTok=null,curChat='main',idx={chats:[]},idxSHA=null;
 let cSHAs={},cContents={},pollT=null,sending=false,pImgs=[],mTy='private',mMbrs=[],delStep=0,delT=null;
 
 // storage
-function store(k,v){try{localStorage.setItem(k,v);return}catch(e){}try{sessionStorage.setItem(k,v)}catch(e){}}
+function store(k,v){
+  try{localStorage.setItem(k,v);return}catch(e){}
+  try{sessionStorage.setItem(k,v)}catch(e){}
+  // tell parent bookmarklet to save to its localStorage
+  try{window.parent.postMessage({bkc:'save',k:k,v:v},'*')}catch(e){}
+}
 function get(k){
   try{const v=localStorage.getItem(k);if(v!==null)return v}catch(e){}
   try{const v=sessionStorage.getItem(k);if(v!==null)return v}catch(e){}
-  try{const p=new URLSearchParams(location.hash.slice(1));if(p.has(k))return p.get(k)}catch(e){}
+  // read from hash — bookmarklet passes id;token using ; not & to avoid URL issues
+  try{
+    const hash=location.hash.slice(1);
+    for(const pair of hash.split(';')){
+      const eq=pair.indexOf('=');
+      if(eq>-1&&decodeURIComponent(pair.slice(0,eq))===k)return decodeURIComponent(pair.slice(eq+1));
+    }
+  }catch(e){}
   return null;
 }
 
@@ -253,7 +265,7 @@ function genCID(ty){const c='abcdefghijklmnopqrstuvwxyz0123456789';let id=(ty===
 
 // token
 function loadTok(){return get(SK_TK)}
-function saveTok(t){store(SK_TK,t);try{window.parent.postMessage({type:'BKMK_STORE',key:SK_TK,val:t},'*');window.parent.postMessage({type:'BKMK_STORE',key:SK_ID,val:myID},'*')}catch(e){}}
+function saveTok(t){store(SK_TK,t);store(SK_ID,myID);}
 
 function tokUI(){
   const has=!!ghTok;
